@@ -86,7 +86,6 @@ if (@ARGV) {
 # evaluated until the next line is read.
 my $eof_parse_flag = 1;
 
-use Data::Dumper;
 $/ = $zero_terminated ? "\0" : $/;
 while(defined(chomp($_ = <STDIN> || ($eof_parse_flag-- ? '' : exit)))) {
     if ($eof_parse_flag == 0 or my @matches = $_ =~ /($comparison_regex)/) {
