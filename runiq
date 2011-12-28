@@ -1,0 +1,144 @@
+#!/usr/bin/perl
+use strict;
+use warnings;
+use Getopt::Long;
+Getopt::Long::Configure qw(bundling);
+
+# Command line options
+my $count_number_of_occurences;
+my $only_print_duplicate_lines;
+my $only_print_unique_lines;
+my $discard_lines_that_dont_match;
+my $ignore_case;
+my $comparison_regex = '(.*)';
+my $zero_terminated;
+my $display_all_repeated_lines;
+
+sub show_help {
+    print <<____HELP__;
+Usage: runiq [OPTION]... [INPUT [OUTPUT]]
+Discard all but one of successive identical lines from INPUT (or
+standard input), writing to OUTPUT (or standard output).
+
+Mandatory arguments to long options are mandatory for short options too.
+  -e, --regex=perl-regex
+                        Define regular expression for line comparison
+                        If an explicit matching group is not defined,
+                        the entire regular expression is used as the
+                        comparison key. If a regular expression is not
+                        given, the entire line is used as the key.
+  -c, --count           Prefix lines by the number of occurrences
+  -d, --repeated        Only print duplicate lines
+  -D, --all-repeated[=delimit-method]
+                        Print all duplicate lines
+                        delimit-method={none(default),prepend,separate}
+                        Delimiting is done with blank lines.
+  -i, --ignore-case     Ignore differences in case when comparing
+  -u, --unique          Only print unique lines
+      --help     Display this help and exit
+      --version  Output version information and exit
+  -z, --zero-terminated
+                 End lines with 0 byte, not newline
+      --help     Display this help and exit
+
+Note: 'runiq' does not detect repeated lines unless they are adjacent.
+____HELP__
+    exit;
+}
+
+my $getopt_failure = GetOptions(
+    'count|c' => \$count_number_of_occurences,
+    'unique|u' => \$only_print_unique_lines,
+    'repeated|d' => \$only_print_duplicate_lines,
+    'ignore-case|i' => \$ignore_case,
+    'discard-lines|l' => \$discard_lines_that_dont_match,
+    'regex|e=s' => \$comparison_regex,
+    'zero-terminated|z' => \$zero_terminated,
+    'all-repeated|D:s' => \$display_all_repeated_lines,
+    'help|h' => \&show_help,
+);
+my $format = $count_number_of_occurences ? '%7i %s' : '%.0s%s';
+
+my $previous_key;
+my $previous_line;
+my $count;
+
+if ($count_number_of_occurences && defined $display_all_repeated_lines) {
+    die "runiq: " .
+        "printing all duplicated lines and repeat counts is meaningless\n";
+}
+
+if ($#ARGV > 2) {
+    die "runiq: unexpected arguments\n";
+}
+
+# Because of the terrible things I'm doing in the while loop conditional, the
+# diamond operator doesn't behave normally, so this is the work-around.
+if (@ARGV) {
+    open STDIN, '<', shift @ARGV;
+    if (@ARGV) {
+        open STDOUT, '>', shift @ARGV;
+    }
+}
+
+# When we've reached the end of the file, we need to run through the while loop
+# one more time since certain conditionals for the current line will not be
+# evaluated until the next line is read.
+my $eof_parse_flag = 1;
+
+use Data::Dumper;
+$/ = $zero_terminated ? "\0" : $/;
+while(defined(chomp($_ = <STDIN> || ($eof_parse_flag-- ? '' : exit)))) {
+    if ($eof_parse_flag == 0 or my @matches = $_ =~ /($comparison_regex)/) {
+        if ($#matches > 0) {
+            shift @matches;
+        }
+        my $key = join(' ', @matches);
+        $key = lc $key if $ignore_case;
+
+        if (!defined($count)) {
+            $previous_key = $key;
+            $previous_line = $_;
+            $count = 0;
+
+            if (!($only_print_unique_lines || $only_print_duplicate_lines) && eof) {
+                printf $format, (1, "$_$/") if $eof_parse_flag != 0;
+            }
+        }
+
+        if ($key ne $previous_key or $eof_parse_flag == 0) {
+            if ($only_print_unique_lines) {
+                printf $format, ($count, "$previous_line$/") if $count == 1;
+            }
+
+            elsif (defined $display_all_repeated_lines) {
+                if ($count != 1) {
+                    print $/ if $display_all_repeated_lines eq 'prepend';
+                    print "$previous_line$/" x $count;
+                    if ($display_all_repeated_lines eq 'separate') {
+                        $display_all_repeated_lines = 'prepend';
+                    }
+                }
+            }
+
+            elsif ($only_print_duplicate_lines) {
+                printf $format, ($count, "$previous_line$/") if $count != 1;
+            }
+
+            else {
+                printf $format, ($count, "$previous_line$/");
+            }
+
+            $count = 1;
+        }
+        elsif ($key eq $previous_key) {
+            $count++;
+        }
+
+        $previous_key = $key;
+        $previous_line = $_;
+    }
+    elsif (!$discard_lines_that_dont_match) {
+        print "$_$/";
+    }
+}
