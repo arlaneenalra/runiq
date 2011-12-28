@@ -10,7 +10,7 @@ my $only_print_duplicate_lines;
 my $only_print_unique_lines;
 my $discard_lines_that_dont_match;
 my $ignore_case;
-my $comparison_regex = '(.*)';
+my $comparison_regex = '.*';
 my $zero_terminated;
 my $display_all_repeated_lines;
 
@@ -74,11 +74,10 @@ if ($#ARGV > 2) {
 
 # Because of the terrible things I'm doing in the while loop conditional, the
 # diamond operator doesn't behave normally, so this is the work-around.
-if (@ARGV) {
-    open STDIN, '<', shift @ARGV;
-    if (@ARGV) {
-        open STDOUT, '>', shift @ARGV;
-    }
+if ($_  = shift @ARGV) {
+    die "runiq: $_: No such file or directory\n" unless -e $_;
+    open STDIN, '<', $_;
+    open STDOUT, '>', shift @ARGV if @ARGV;
 }
 
 # When we've reached the end of the file, we need to run through the while loop
