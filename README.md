@@ -33,8 +33,7 @@ Counting things with arbitrary descriptions:
     tiny cow peasant
     massive horse
     1337_ha><0rz_horse_1970_01_01
-
-    sinister:runiq [2]$ runiq --regex '.*(cow|horse|duck).*' --count animals
+    sinister:runiq [2]$ runiq --regex 'cow|horse|duck' --count animals
           1 gigantic ferocious man-eating duck
           3 tiny cow peasant
           2 1337_ha><0rz_horse_1970_01_01
