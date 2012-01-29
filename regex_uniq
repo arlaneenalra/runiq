@@ -1,0 +1,82 @@
+#!/usr/bin/env perl
+
+use strict;
+use warnings;
+use diagnostics;
+
+# state variables, annoying -- Don't Touch
+my ($uniq_key, $uniq_line);
+
+#open(my $fh, '<', 't/data/fuzzdata')
+open(my $fh, '<', 't/data/lastline_test')
+    or die "Unable to open data file";
+
+
+my ($line, $count) = (undef, 1);
+
+while (1) {
+    ($line, $count) = uniq_read($fh, sub { $_[0] });
+
+    if($count > 0 ) {
+        print "$count '$line'$/";
+    } else {
+        last;
+    }
+}
+
+close($fh);
+
+#
+# Reads a lines from a file handle return a line
+# and the number of times the line is repeated. It will
+# read until there are no repititions and then returns.
+# On EOF it returns $count = 0
+#
+# my ($line, $count) = uniq_read($fh, $key_callback);
+#
+
+sub uniq_read {
+    my ($fh, $key_callback) = @_;
+
+    return '', 0
+        if(eof($fh));
+
+    # the defined check handles the intial count
+    my $count = defined($uniq_line) ? 0 : -1;
+
+    while(defined(my $new_line = <$fh>)) {
+
+        chomp($new_line);
+
+        # extract the key
+        my $key = $key_callback->($new_line);
+
+        #print "--$key--$new_line#$/";
+
+        # Save this off before we update
+        # the global state.  For the
+        # first run we use the just read
+        # value.
+
+        my $prev_line = $uniq_line;
+        my $prev_uniq_key = $uniq_key;
+
+        $uniq_key = $key;
+        $uniq_line = $new_line;
+
+        $count++;
+
+        next
+            if(!defined($prev_uniq_key));
+
+        # do the uniquness
+        return $prev_line, $count
+
+            if(!defined($prev_uniq_key) || $key ne $prev_uniq_key);
+    }
+
+    $count++;
+
+    # We shouldn't get here unless we have eof
+    return $uniq_line, $count;
+}
