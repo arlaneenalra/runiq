@@ -4,27 +4,79 @@ use strict;
 use warnings;
 use diagnostics;
 
-# state variables, annoying -- Don't Touch
+use Getopt::Long;
+Getopt::Long::Configure qw/bundling/;
+
+# State variables, annoying -- These need to exist right now
 my ($uniq_key, $uniq_line);
+
+# default key_callback - match the entire line
+my $key_callback = sub { $_[0] };
+
+# filters to apply to output
+my @filter_chain;
+
+# Deal with command line options
+my $options_failure = GetOptions(
+    # key options 
+    'ignore-case|i' => sub {
+        $key_callback = sub {
+            my ($line) = @_;
+            return lc $line;
+        };
+    },
+
+    # filtering options
+    'unique|u' => sub {
+        push @filter_chain,sub {
+            my ($line, $count) = @_;
+            return ($count == 1);
+        };
+    },
+    'repeated|d' => sub {
+        push @filter_chain,sub {
+            my ($line, $count) = @_;
+            return ($count > 1);
+        };
+    },
+
+    # output options
+);
 
 #open(my $fh, '<', 't/data/fuzzdata')
 open(my $fh, '<', 't/data/lastline_test')
     or die "Unable to open data file";
 
-
+# Processing loop
 my ($line, $count) = (undef, 1);
 
-while (1) {
-    ($line, $count) = uniq_read($fh, sub { $_[0] });
+PROC_LOOP: while (1) {
+    ($line, $count) = uniq_read($fh, $key_callback);
 
-    if($count > 0 ) {
-        print "$count '$line'$/";
-    } else {
-        last;
+    # Are we on the last block?
+    last
+        if(!$count);
+
+    # Apply filters, 
+    for my $filter (@filter_chain) {
+        if(!$filter->($line, $count)) {
+            next PROC_LOOP;
+        }
     }
+
+    print "$count $line$/";
 }
 
 close($fh);
+
+
+# Output Usage and Exit, I borrowed this f
+sub usage {
+
+    print "Working on this$/";
+
+    exit(0);
+}
 
 #
 # Reads a lines from a file handle return a line
@@ -68,12 +120,12 @@ sub uniq_read {
         next
             if(!defined($prev_uniq_key));
 
-        # do the uniquness
+        # Do the uniquness
         return $prev_line, $count
-
             if(!defined($prev_uniq_key) || $key ne $prev_uniq_key);
     }
 
+    # Update count
     $count++;
 
     # Clear the key to that the eof test
