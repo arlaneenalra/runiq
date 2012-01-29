@@ -6,57 +6,66 @@ use diagnostics;
 
 use Data::Dumper;
 
+use English qw/-no_match_vars/;
+
 use Getopt::Long;
 Getopt::Long::Configure qw/bundling/;
 
 # State variables, annoying -- These need to exist right now
 my ($uniq_key, @uniq_lines);
 
-# default key_callback - match the entire line
+# Set default $OUTPUT_RECORD_SEPARATOR value
+# to \n
+$OUTPUT_RECORD_SEPARATOR = "\n";
+
+# Default key_callback - match the entire line
 my $key_callback = sub { $_[0] };
 
-# filters to apply to output
+# Setup the output handler
+my $output_handler = \&output_default;
+
+# Filters to apply to output
 my @filter_chain;
 
 # Deal with command line options
 my $options_failure = GetOptions(
     # key options 
     'ignore-case|i' => sub {
-        $key_callback = sub {
-            my ($line) = @_;
-
-            return lc $line;
-        };
+        $key_callback = \&key_ignore_case;
     },
 
     # filtering options
-    'unique|u' => sub {
-        push @filter_chain,sub {
-            my ($lines) = @_;
-
-            return (scalar(@{$lines}) == 1);
-        };
+    'unique|u' => sub { # only output non-repeated lines
+        push @filter_chain, \&filter_unique;
     },
 
-    'repeated|d' => sub {
-        push @filter_chain,sub {
-            my ($lines) = @_;
-
-            return (scalar(@{$lines}) > 1);
-        };
+    'repeated|d' => sub { # only output repeated lines
+        push @filter_chain, \&filter_repeated;
     },
 
     # output options
+    'count|c' => sub { # add in the count
+        $output_handler = \&output_with_count;
+    },
+
+    # Use chr(0) for input and output separators
+    'zero-terminated|z' => sub {
+        $INPUT_RECORD_SEPARATOR = $OUTPUT_RECORD_SEPARATOR = chr(0);
+    }
 );
 
 #open(my $fh, '<', 't/data/fuzzdata')
-open(my $fh, '<', 't/data/lastline_test')
+open(STDIN, '<', 't/data/lastline_test')
     or die "Unable to open data file";
+
+# Force binary mode on IO 
+binmode STDIN;
+binmode STDOUT;
 
 # Processing loop
 
 while (1) {
-    my @lines = uniq_read($fh, $key_callback);
+    my @lines = uniq_read(*STDIN, $key_callback);
 
     # Are we on the last block?
     last
@@ -68,26 +77,73 @@ while (1) {
         next;
     }
 
-    print Dumper(\@lines);
+    # Do output
+    #print Dumper(\@lines);
+    $output_handler->(\@lines);
 }
 
-close($fh);
+close(STDIN);
+
 
 
 # Output Usage and Exit, I borrowed this f
 sub usage {
 
-    print "Working on this$/";
+    print "Working on this";
 
     exit(0);
 }
 
+# Default output handler
+sub output_default {
+    my ($lines) = @_;
+
+    # Output first matched line
+    print $lines->[0];
+}
+
+# Display count
+sub output_with_count {
+    my ($lines) = @_;
+
+    # Use sprintf so that print works right
+    my $output_line = sprintf "%7i %s", scalar(@{$lines}), $lines->[0];
+
+    print $output_line;
+}
+
+# Key Handler that identifies case
+sub key_ignore_case {
+    my ($line) = @_;
+
+    return lc $line;
+};
+
+# Filter to only display unique lines
+sub filter_unique {
+    my ($lines) = @_;
+
+    return (scalar(@{$lines}) == 1);
+}
+
+# Filter to only display repeated lines
+sub filter_repeated {
+    my ($lines) = @_;
+
+    return (scalar(@{$lines}) > 1);
+};
+
+#
 # Process the given line through a chain of filters
 # if any of the filters return false, return false
-# otherwise return true
+# otherwise return true.
+#
+# my $result = apply_filters(\@lines, \@filters);
+#
 sub apply_filters {
     my ($lines, $filter_chain) = @_;
 
+    # Teast each filter in turn
     for my $filter (@{$filter_chain}) {
         if (!$filter->($lines)) {
             return 0;
