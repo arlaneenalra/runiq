@@ -112,17 +112,25 @@ sub uniq_read {
 
         # Update global state
         $uniq_key = $key;
-        $uniq_line = $new_line;
 
         $count++;
 
         # Deal with first iterations
-        next
-            if(!defined($prev_uniq_key));
+        if(!defined($prev_uniq_key)) {
+            # Update saved line
+            $uniq_line = $new_line;
+
+            next;
+        }
 
         # Do the uniquness
-        return $prev_line, $count
-            if(!defined($prev_uniq_key) || $key ne $prev_uniq_key);
+        if(!defined($prev_uniq_key) || $key ne $prev_uniq_key) {
+            # Update saved line
+            $uniq_line = $new_line;
+
+            return $prev_line, $count;
+        }
+
     }
 
     # Update count
