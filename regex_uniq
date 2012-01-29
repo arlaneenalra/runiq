@@ -164,7 +164,7 @@ sub output_repeated {
 
     # output each line
     foreach my $line ( @{$lines}) {
-        print $lines->[0];
+        print $line;
     }
 }
 

@@ -19,7 +19,7 @@
             '--all-repeated --repeated'
         do
             head -c65536 /dev/urandom | tr -cd 'ab\n' > /tmp/fuzzdata
-            ./runiq $ARGUMENTS < /tmp/fuzzdata | tr -d '[:blank:]' > /tmp/mine
+            ./regex_uniq $ARGUMENTS < /tmp/fuzzdata | tr -d '[:blank:]' > /tmp/mine
             uniq $ARGUMENTS < /tmp/fuzzdata | tr -d '[:blank:]' > /tmp/gnuuniq
             md5sum /tmp/{mine,gnuuniq}
         done
