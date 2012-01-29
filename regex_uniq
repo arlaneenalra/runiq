@@ -66,16 +66,34 @@ my $options_failure = GetOptions(
     }
 );
 
-#open(my $fh, '<', 't/data/fuzzdata')
-open(STDIN, '<', 't/data/lastline_test')
-    or die "Unable to open data file";
+# Handle input and output arguments
+if(@ARGV > 2) { # too many argument
+    usage();
+}
 
-# Force binary mode on IO 
+# The only arguments left should be an input file and an
+# output file.
+my ($input_file, $output_file) = @ARGV;
+
+if($input_file) {
+    open(STDIN, "<", $input_file)
+        or die "Unable to open $input_file for input.";
+}
+
+if($output_file) {
+    open(STDOUT, ">", $output_file)
+        or die "Unable to open $output_file for output.";
+}
+
+
+# Force binary mode on IO
 binmode STDIN;
 binmode STDOUT;
 
-# Processing loop
+# turn on auto flushing
+$OUTPUT_AUTOFLUSH = 1;
 
+# Processing loop
 while (1) {
     my @lines = uniq_read(*STDIN, $key_callback);
 
@@ -94,11 +112,17 @@ while (1) {
     $output_handler->(\@lines);
 }
 
-close(STDIN);
+# close file handles if we were given file arguments
+if($input_file) {
+    close(STDIN);
+}
+
+if($output_file) {
+    close(STDOUT);
+}
 
 
-
-# Output Usage and Exit, I borrowed this f
+# Output Usage and Exit
 sub usage {
 
     print "Working on this";
