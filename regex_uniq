@@ -186,7 +186,7 @@ sub key_use_regex {
 
     # Drop the top level matching group if
     # there is more than one
-    if(scalar(@matches) > 0) {
+    if(scalar(@matches) > 1) {
         shift @matches;
     }
 
