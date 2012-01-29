@@ -38,8 +38,9 @@ close($fh);
 sub uniq_read {
     my ($fh, $key_callback) = @_;
 
+    # We are at eof and have dealt with any end runs
     return '', 0
-        if(eof($fh));
+        if(eof($fh) && !defined($uniq_key));
 
     # the defined check handles the intial count
     my $count = defined($uniq_line) ? 0 : -1;
@@ -51,21 +52,19 @@ sub uniq_read {
         # extract the key
         my $key = $key_callback->($new_line);
 
-        #print "--$key--$new_line#$/";
-
         # Save this off before we update
-        # the global state.  For the
-        # first run we use the just read
-        # value.
+        # the global state.
 
         my $prev_line = $uniq_line;
         my $prev_uniq_key = $uniq_key;
 
+        # Update global state
         $uniq_key = $key;
         $uniq_line = $new_line;
 
         $count++;
 
+        # Deal with first iterations
         next
             if(!defined($prev_uniq_key));
 
@@ -76,6 +75,10 @@ sub uniq_read {
     }
 
     $count++;
+
+    # Clear the key to that the eof test
+    # at the top catches on the next call
+    $uniq_key = undef;
 
     # We shouldn't get here unless we have eof
     return $uniq_line, $count;
