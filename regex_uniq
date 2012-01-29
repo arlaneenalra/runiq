@@ -12,7 +12,7 @@ use Getopt::Long;
 Getopt::Long::Configure qw/bundling/;
 
 # State variables, annoying -- These need to exist right now
-my ($uniq_key, @uniq_lines, $delimiter_type);
+my ($uniq_key, @uniq_lines, $delimiter_type, $key_regex);
 
 # Set default $OUTPUT_RECORD_SEPARATOR value
 # to \n
@@ -20,6 +20,10 @@ $OUTPUT_RECORD_SEPARATOR = "\n";
 
 # Default key_callback - match the entire line
 my $key_callback = sub { $_[0] };
+
+# Flag indicating that keys should be forced to lower case
+# before comparison
+my $lower_case_all = 0;
 
 # Setup the output handler
 my $output_handler = \&output_default;
@@ -30,8 +34,13 @@ my @filter_chain;
 # Deal with command line options
 my $options_failure = GetOptions(
     # key options 
-    'ignore-case|i' => sub {
-        $key_callback = \&key_ignore_case;
+    'ignore-case|i' => \$lower_case_all,
+
+    'regex|e=s' => sub {
+        my ($name, $regex) = @_;
+
+        $key_regex = $regex;
+        $key_callback = \&key_use_regex;
     },
 
     # filtering options
@@ -152,14 +161,15 @@ sub output_with_count {
 sub output_repeated {
     my ($lines) = @_;
 
-    # handle delimiter types
+    # Handle delimiter types
     if($delimiter_type eq 'separate') {
-        # no delimiter on first group,
+        # No delimiter on first group,
         # but we do have one on future
         # groups
         $delimiter_type = 'prepend';
+
     } elsif($delimiter_type eq 'prepend') {
-        print '';
+        print ''; # Output a whitespace block
     }
 
     # output each line
@@ -168,12 +178,25 @@ sub output_repeated {
     }
 }
 
-# Key Handler that identifies case
-sub key_ignore_case {
+# Key Handler that uses a regex
+sub key_use_regex {
     my ($line) = @_;
 
-    return lc $line;
-};
+    my @matches = $line =~ /($key_regex)/;
+
+    # Drop the top level matching group if
+    # there is more than one
+    if(scalar(@matches) > 0) {
+        shift @matches;
+    }
+
+    # join any matches using space as a delimiters
+    # this could be problematic if a match contains
+    # a space.
+    my $key = join(' ', @matches);
+
+    return $key;
+}
 
 # Filter to only display unique lines
 sub filter_unique {
@@ -231,6 +254,10 @@ sub uniq_read {
 
         # extract the key
         my $key = $key_callback->($new_line);
+
+        # treat all keys as lower case
+        $key = lc $key
+            if($lower_case_all);
 
         # Save this off before we update
         # the global state.
