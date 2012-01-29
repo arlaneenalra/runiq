@@ -12,7 +12,7 @@ use Getopt::Long;
 Getopt::Long::Configure qw/bundling/;
 
 # State variables, annoying -- These need to exist right now
-my ($uniq_key, @uniq_lines);
+my ($uniq_key, @uniq_lines, $delimiter_type);
 
 # Set default $OUTPUT_RECORD_SEPARATOR value
 # to \n
@@ -46,6 +46,18 @@ my $options_failure = GetOptions(
     # output options
     'count|c' => sub { # add in the count
         $output_handler = \&output_with_count;
+    },
+
+    'all-repeated|D:s' => sub { # output all repeated lines
+        my ($name, $value) = @_;
+
+        # make sure we have a default value
+        $delimiter_type = $value ? $value : 'none';
+
+        # we use a closure to pass in the value
+        $output_handler = \&output_repeated;
+
+        push @filter_chain, \&filter_repeated;
     },
 
     # Use chr(0) for input and output separators
@@ -102,7 +114,7 @@ sub output_default {
     print $lines->[0];
 }
 
-# Display count
+# Display count with output
 sub output_with_count {
     my ($lines) = @_;
 
@@ -110,6 +122,26 @@ sub output_with_count {
     my $output_line = sprintf "%7i %s", scalar(@{$lines}), $lines->[0];
 
     print $output_line;
+}
+
+# Output Handler for delimited output
+sub output_repeated {
+    my ($lines) = @_;
+
+    # handle delimiter types
+    if($delimiter_type eq 'separate') {
+        # no delimiter on first group,
+        # but we do have one on future
+        # groups
+        $delimiter_type = 'prepend';
+    } elsif($delimiter_type eq 'prepend') {
+        print '';
+    }
+
+    # output each line
+    foreach my $line ( @{$lines}) {
+        print $lines->[0];
+    }
 }
 
 # Key Handler that identifies case
