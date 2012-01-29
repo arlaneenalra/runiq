@@ -4,11 +4,13 @@ use strict;
 use warnings;
 use diagnostics;
 
+use Data::Dumper;
+
 use Getopt::Long;
 Getopt::Long::Configure qw/bundling/;
 
 # State variables, annoying -- These need to exist right now
-my ($uniq_key, $uniq_line);
+my ($uniq_key, @uniq_lines);
 
 # default key_callback - match the entire line
 my $key_callback = sub { $_[0] };
@@ -22,6 +24,7 @@ my $options_failure = GetOptions(
     'ignore-case|i' => sub {
         $key_callback = sub {
             my ($line) = @_;
+
             return lc $line;
         };
     },
@@ -29,14 +32,17 @@ my $options_failure = GetOptions(
     # filtering options
     'unique|u' => sub {
         push @filter_chain,sub {
-            my ($line, $count) = @_;
-            return ($count == 1);
+            my ($lines) = @_;
+
+            return (scalar(@{$lines}) == 1);
         };
     },
+
     'repeated|d' => sub {
         push @filter_chain,sub {
-            my ($line, $count) = @_;
-            return ($count > 1);
+            my ($lines) = @_;
+
+            return (scalar(@{$lines}) > 1);
         };
     },
 
@@ -48,23 +54,21 @@ open(my $fh, '<', 't/data/lastline_test')
     or die "Unable to open data file";
 
 # Processing loop
-my ($line, $count) = (undef, 1);
 
-PROC_LOOP: while (1) {
-    ($line, $count) = uniq_read($fh, $key_callback);
+while (1) {
+    my @lines = uniq_read($fh, $key_callback);
 
     # Are we on the last block?
     last
-        if(!$count);
+        if(scalar(@lines) == 0);
 
-    # Apply filters, 
-    for my $filter (@filter_chain) {
-        if(!$filter->($line, $count)) {
-            next PROC_LOOP;
-        }
+    # Apply filters, skip if any of the
+    # filters return false, skip this line
+    if(!apply_filters(\@lines, \@filter_chain)) {
+        next;
     }
 
-    print "$count $line$/";
+    print Dumper(\@lines);
 }
 
 close($fh);
@@ -78,24 +82,36 @@ sub usage {
     exit(0);
 }
 
+# Process the given line through a chain of filters
+# if any of the filters return false, return false
+# otherwise return true
+sub apply_filters {
+    my ($lines, $filter_chain) = @_;
+
+    for my $filter (@{$filter_chain}) {
+        if (!$filter->($lines)) {
+            return 0;
+        }
+    }
+
+    return 1;
+}
+
 #
 # Reads a lines from a file handle return a line
 # and the number of times the line is repeated. It will
 # read until there are no repititions and then returns.
-# On EOF it returns $count = 0
+# On EOF it returns @lines = ()
 #
-# my ($line, $count) = uniq_read($fh, $key_callback);
+# my @lines = uniq_read($fh, $key_callback);
 #
 
 sub uniq_read {
     my ($fh, $key_callback) = @_;
 
     # We are at eof and have dealt with any end runs
-    return '', 0
+    return ()
         if(eof($fh) && !defined($uniq_key));
-
-    # the defined check handles the intial count
-    my $count = defined($uniq_line) ? 0 : -1;
 
     while(defined(my $new_line = <$fh>)) {
 
@@ -106,40 +122,31 @@ sub uniq_read {
 
         # Save this off before we update
         # the global state.
-
-        my $prev_line = $uniq_line;
         my $prev_uniq_key = $uniq_key;
 
         # Update global state
         $uniq_key = $key;
 
-        $count++;
-
-        # Deal with first iterations
-        if(!defined($prev_uniq_key)) {
-            # Update saved line
-            $uniq_line = $new_line;
-
-            next;
-        }
-
         # Do the uniquness
-        if(!defined($prev_uniq_key) || $key ne $prev_uniq_key) {
-            # Update saved line
-            $uniq_line = $new_line;
+        if(defined($prev_uniq_key) && $key ne $prev_uniq_key) {
 
-            return $prev_line, $count;
+            # Save off lines and reset for next
+            # line to check
+            my @lines = @uniq_lines;
+            @uniq_lines = ();
+
+            push @uniq_lines, $new_line;
+
+            return @lines;
         }
 
+        push @uniq_lines, $new_line;
     }
-
-    # Update count
-    $count++;
 
     # Clear the key to that the eof test
     # at the top catches on the next call
     $uniq_key = undef;
 
     # We shouldn't get here unless we have eof
-    return $uniq_line, $count;
+    return @uniq_lines;
 }
